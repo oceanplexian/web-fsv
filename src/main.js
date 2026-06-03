@@ -290,18 +290,22 @@ function startTour() {
   const cx = root.x + root.w / 2, cz = root.z + root.d / 2;
   const span = Math.max(layoutBounds(currentLayout.boxes), 20);
   const yLook = root.yBase + root.height * 0.5;
-  const N = 7;
+  const N = 8;
   const pts = [];
   for (let i = 0; i < N; i++) {
-    const a = Math.PI / 2 + (i / N) * Math.PI * 2;        // begin at the front (+z)
-    const r = span * (0.95 + 0.42 * Math.sin(a + 0.3));   // radius breathes in/out
-    const h = span * (0.30 + 0.34 * (0.5 + 0.5 * Math.sin(a * 2))); // height swoops
+    const t = i / N;
+    const a = Math.PI / 2 + t * Math.PI * 2;                      // begin at the front (+z)
+    // Low, zoomed-in weave: start close to the root and skim just above the
+    // platforms, swinging a little farther + higher around the back and
+    // returning. Much tighter and lower than a wide overview orbit.
+    const r = span * (0.38 - 0.12 * Math.cos(t * Math.PI * 2));   // ~0.26..0.50 span — close in
+    const h = span * (0.09 - 0.04 * Math.cos(t * Math.PI * 2));   // ~0.05..0.13 span — low altitude
     pts.push(new THREE.Vector3(cx + Math.cos(a) * r, yLook + h, cz + Math.sin(a) * r));
   }
   const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
   cameraAnim = null;
   _flyVel.set(0, 0, 0);
-  tour = { curve, lookAt: new THREE.Vector3(cx, yLook, cz), start: performance.now(), duration: 34 };
+  tour = { curve, lookAt: new THREE.Vector3(cx, yLook, cz), start: performance.now(), duration: 36 };
 }
 
 function stopTour() {
