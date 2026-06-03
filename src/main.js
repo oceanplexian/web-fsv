@@ -290,22 +290,24 @@ function startTour() {
   const cx = root.x + root.w / 2, cz = root.z + root.d / 2;
   const span = Math.max(layoutBounds(currentLayout.boxes), 20);
   const yLook = root.yBase + root.height * 0.5;
-  const N = 8;
-  const pts = [];
-  for (let i = 0; i < N; i++) {
-    const t = i / N;
-    const a = Math.PI / 2 + t * Math.PI * 2;                      // begin at the front (+z)
-    // Low, zoomed-in weave: start close to the root and skim just above the
-    // platforms, swinging a little farther + higher around the back and
-    // returning. Much tighter and lower than a wide overview orbit.
-    const r = span * (0.38 - 0.12 * Math.cos(t * Math.PI * 2));   // ~0.26..0.50 span — close in
-    const h = span * (0.09 - 0.04 * Math.cos(t * Math.PI * 2));   // ~0.05..0.13 span — low altitude
-    pts.push(new THREE.Vector3(cx + Math.cos(a) * r, yLook + h, cz + Math.sin(a) * r));
-  }
-  const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+  const center = new THREE.Vector3(cx, yLook, cz);
+  const R = span * 0.34;            // low orbit radius — close, held constant (no zoom-out)
+  const H = span * 0.065;           // low altitude
+  const theta0 = Math.PI / 2;       // begin at the front (+z)
+  // Phase 1: a straight run flying in toward the structure from the front,
+  // descending slightly. Phase 2: a low, constant-radius curve around it.
+  const orbitEntry = new THREE.Vector3(
+    cx + Math.cos(theta0) * R, yLook + H, cz + Math.sin(theta0) * R);
+  const introStart = new THREE.Vector3(
+    cx + Math.cos(theta0) * span * 1.15, yLook + span * 0.16, cz + Math.sin(theta0) * span * 1.15);
   cameraAnim = null;
   _flyVel.set(0, 0, 0);
-  tour = { curve, lookAt: new THREE.Vector3(cx, yLook, cz), start: performance.now(), duration: 36 };
+  tour = {
+    center, R, H, theta0, introStart, orbitEntry,
+    introDur: 5.5,   // seconds flying straight in
+    orbitDur: 40,    // seconds per revolution around the structure
+    start: performance.now(),
+  };
 }
 
 function stopTour() {
@@ -314,9 +316,22 @@ function stopTour() {
 
 function tickTour(now) {
   if (!tour) return;
-  const u = ((now - tour.start) / 1000 / tour.duration) % 1; // looped, arc-length param
-  camera.position.copy(tour.curve.getPointAt(u));
-  controls.target.copy(tour.lookAt);
+  const t = (now - tour.start) / 1000;
+  if (t < tour.introDur) {
+    // Straight dolly-in to the orbit entry, easing out as it arrives.
+    const k = 1 - Math.pow(1 - t / tour.introDur, 3);
+    camera.position.lerpVectors(tour.introStart, tour.orbitEntry, k);
+  } else {
+    // Constant-radius low curve around the structure (no zoom). A faint bob
+    // keeps it from feeling perfectly mechanical.
+    const ang = tour.theta0 + ((t - tour.introDur) / tour.orbitDur) * Math.PI * 2;
+    camera.position.set(
+      tour.center.x + Math.cos(ang) * tour.R,
+      tour.center.y + tour.H + tour.H * 0.18 * Math.sin(ang * 2),
+      tour.center.z + Math.sin(ang) * tour.R,
+    );
+  }
+  controls.target.copy(tour.center);
 }
 
 function pickBoxAt(clientX, clientY) {
