@@ -1,0 +1,21 @@
+{
+  "name": "web-fsv",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A 3D filesystem visualizer in the browser — a Three.js port of fsv / SGI's fsn from Jurassic Park",
+  "keywords": ["fsv", "fsn", "threejs", "visualization", "filesystem", "jurassic-park", "3d"],
+  "homepage": "https://dino.fieldio.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oceanplexian/web-fsv.git"
+  },
+  "license": "LGPL-2.1-or-later",
+  "scripts": {
+    "start": "node server.js",
+    "files": "FSV_SOURCE=files node server.js",
+    "gen-demo": "node scripts/gen-demo-tree.mjs"
+  },
+  "dependencies": {
+    "three": "^0.165.0"
+  }
+}

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>fsv — web</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden;
+                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  #ui {
+    position: fixed; top: 12px; left: 12px; z-index: 10;
+    background: rgba(0,0,0,0.55); color: #fff; padding: 10px 12px;
+    border-radius: 6px; font-size: 12px; line-height: 1.4;
+    backdrop-filter: blur(6px); max-width: 70vw;
+  }
+  #ui input { width: 360px; padding: 4px 6px; border: 1px solid #555; border-radius: 4px;
+              background: #222; color: #fff; font: inherit; font-family: ui-monospace, monospace; }
+  #ui button { padding: 4px 10px; margin-left: 6px; border: 1px solid #555; border-radius: 4px;
+               background: #333; color: #fff; font: inherit; cursor: pointer; }
+  #ui button:hover { background: #444; }
+  #status { margin-top: 6px; opacity: 0.85; font-family: ui-monospace, monospace; }
+  #tip {
+    position: fixed; display: none; z-index: 9; pointer-events: none;
+    background: rgba(0,0,0,0.78); color: #fff; padding: 4px 8px;
+    border-radius: 4px; font: 11px ui-monospace, monospace;
+  }
+  #help {
+    position: fixed; bottom: 10px; right: 12px; z-index: 10; color: #fff;
+    background: rgba(0,0,0,0.45); padding: 6px 10px; border-radius: 4px;
+    font: 11px ui-monospace, monospace;
+  }
+
+  /* CRT post-processing — scanlines, vignette, flicker, rounded "tube". */
+  #crt {
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    background:
+      repeating-linear-gradient(90deg,
+        rgba(255, 0, 0, 0.06) 0px, rgba(255, 0, 0, 0.06) 1px,
+        rgba(0, 255, 0, 0.06) 1px, rgba(0, 255, 0, 0.06) 2px,
+        rgba(0, 0, 255, 0.06) 2px, rgba(0, 0, 255, 0.06) 3px),
+      repeating-linear-gradient(to bottom,
+        rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 1px,
+        transparent 1px, transparent 3px),
+      radial-gradient(ellipse 80% 80% at center,
+        transparent 50%, rgba(0, 0, 0, 0.5) 88%, rgba(0, 0, 0, 0.95) 100%);
+    mix-blend-mode: multiply;
+    animation: crtFlicker 0.18s steps(2) infinite;
+    /* rounded CRT tube corners + heavy bezel shadow */
+    border-radius: 28px;
+    box-shadow:
+      inset 0 0 120px 30px rgba(0, 0, 0, 0.6),
+      inset 0 0 8px 2px rgba(255, 255, 255, 0.04);
+  }
+  @keyframes crtFlicker {
+    0%, 100% { opacity: 0.92; }
+    50% { opacity: 1.0; }
+  }
+  /* CRT screen curvature — barrel-like bulge + corner darkening on the canvas. */
+  canvas {
+    border-radius: 28px;
+    /* SVG filter applies a real (mild) pin-cushion to barrel-fake the curve. */
+    filter: saturate(1.1) contrast(1.04)
+            drop-shadow( 0.6px 0 0 rgba(255, 0, 0, 0.12))
+            drop-shadow(-0.6px 0 0 rgba(0, 200, 255, 0.12));
+  }
+
+  /* Jurassic Park boot terminal. Period-accurate to a 1993 SGI/Unix login:
+     phosphor cyan text, monospace, ASCII border, type-on boot log. */
+  #splash {
+    position: fixed; inset: 0; z-index: 1000;
+    background: #000;
+    color: #33ffcc; font: 14px/1.45 ui-monospace, "Menlo", "Courier New", monospace;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    padding: 38px 24px 24px; text-align: left; overflow: hidden;
+    transition: opacity 0.6s ease; opacity: 1;
+    text-shadow: 0 0 4px rgba(51, 255, 204, 0.5);
+  }
+  #splash.hidden { opacity: 0; pointer-events: none; }
+  #splash::before {
+    /* phosphor scanlines (the splash itself, separate from main #crt) */
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0.0) 0px, rgba(0,0,0,0.0) 1px,
+      rgba(0,0,0,0.30) 1px, rgba(0,0,0,0.30) 2px);
+    z-index: 1;
+  }
+  #splash > * { position: relative; z-index: 2; }
+  #splash .logo-wrap {
+    margin: 0 auto 22px; padding: 0;
+    width: min(46vw, 420px); display: flex; justify-content: center;
+  }
+  #splash .logo-wrap img {
+    width: 100%; height: auto;
+    filter: drop-shadow(0 0 14px rgba(255, 60, 30, 0.5))
+            drop-shadow(0 0 4px rgba(255, 200, 0, 0.4));
+    animation: jpFlicker 5s infinite;
+  }
+  @keyframes jpFlicker {
+    0%, 92%, 100% { opacity: 1; }
+    94% { opacity: 0.6; }
+    95% { opacity: 1; }
+    96% { opacity: 0.85; }
+  }
+  #splash .term {
+    width: min(720px, 92vw); margin: 0 auto;
+    font-size: 13px; line-height: 1.55;
+    color: #33ffcc;
+  }
+  #splash .term pre {
+    margin: 0; font: inherit; color: inherit;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  #splash .term .hdr     { color: #ccff00; }
+  #splash .term .ok      { color: #33ffcc; }
+  #splash .term .warn    { color: #ff5555; }
+  #splash .term .label   { color: #ccff00; }
+  #splash .term .dim     { color: #1f9b7d; }
+  #splash .term .blink::after {
+    content: '▮'; margin-left: 1px; color: #ccff00;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  #splash .prompt {
+    width: min(720px, 92vw); margin: 22px auto 0;
+    font-size: 13px; color: #ccff00;
+  }
+  #splash button {
+    background: #000; color: #ccff00; border: 1px solid #ccff00;
+    font: 13px ui-monospace, "Menlo", monospace; letter-spacing: 0.18em;
+    padding: 8px 22px; cursor: pointer; text-transform: uppercase;
+    margin-left: 8px;
+    transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+    text-shadow: inherit;
+  }
+  #splash button:hover, #splash button:focus {
+    background: #ccff00; color: #000; outline: none; text-shadow: none;
+    box-shadow: 0 0 18px rgba(204, 255, 0, 0.55);
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="ui">
+    <div>
+      <input id="pathInput" placeholder="/path/to/visualize" />
+      <button id="loadBtn">scan</button>
+    </div>
+    <div id="status">ready</div>
+  </div>
+  <div id="splash">
+    <div class="logo-wrap">
+      <img src="/assets/logo/jurassic.svg" alt="Jurassic Park" />
+    </div>
+    <div class="term"><pre id="splashLog"></pre></div>
+    <div class="prompt" id="splashPrompt" style="visibility:hidden">
+      <span class="label">login:</span> <span style="color:#33ffcc">visitor</span>&nbsp;&nbsp;<span class="label">access:</span> <span style="color:#33ffcc" class="blink">_</span>
+      <button id="splashEnter">[ Enter ]</button>
+    </div>
+  </div>
+  <script>
+    // Type-on boot sequence. Period-accurate to a 1993 SGI/Unix terminal:
+    // ASCII box, system check lines with [OK] / [WARN], blinking prompt.
+    (function() {
+      const log = document.getElementById('splashLog');
+      const prompt = document.getElementById('splashPrompt');
+      if (!log) return;
+      const lines = [
+        { t: '┌─────────────────────────────────────────────────────────────┐', cls: 'hdr' },
+        { t: '│   I N G E N   B I O S Y N    *    NETWORK SYSTEMS  v 1.4    │', cls: 'hdr' },
+        { t: '│   ─────────────────────────────────────────────────────     │', cls: 'hdr' },
+        { t: '│   ISLA NUBLAR  ·  CONTROL ROOM A4  ·  CRAY/UNIX-2 KERNEL    │', cls: 'hdr' },
+        { t: '└─────────────────────────────────────────────────────────────┘', cls: 'hdr' },
+        { t: '' },
+        { t: '> System self-check ......................... [ OK ]' },
+        { t: '> SGI graphics workstations (3) ............. [ ONLINE ]' },
+        { t: '> Embryonic cold storage .................... [ OK ]' },
+        { t: '> Vehicle tracking subsystem ................ [ OK ]' },
+        { t: '> Auto-feeders 1-8 .......................... [ OK ]' },
+        { t: '> Perimeter fence grid 1-9 .................. [ OK ]' },
+        { t: '> Perimeter fence grid 10-12 ................ [ ! WARN ! ]', cls: 'warn' },
+        { t: '> Visitor center life support ............... [ OK ]' },
+        { t: '> fsn 3D filesystem navigator ............... [ READY ]' },
+        { t: '' },
+        { t: '  ███████████████████████████████░░░░░  84%  loading park assets…', cls: 'dim' },
+        { t: '' },
+        { t: '* * *  AUTHORIZED PERSONNEL ONLY  * * *', cls: 'warn' },
+        { t: 'Unauthorized access is a violation of InGen Corp. policy', cls: 'warn' },
+        { t: 'and federal statute 18 U.S.C. § 1030 (1990).', cls: 'warn' },
+        { t: '' },
+      ];
+      let i = 0;
+      function step() {
+        if (i >= lines.length) {
+          prompt.style.visibility = 'visible';
+          return;
+        }
+        const ln = lines[i++];
+        const span = document.createElement('span');
+        if (ln.cls) span.className = ln.cls;
+        span.textContent = ln.t + '\n';
+        log.appendChild(span);
+        // Faster on the header/empty/warning blocks; slightly slower on the
+        // system-check rows so they read like they're really enumerating.
+        const delay = ln.t.startsWith('>') ? 95 : (ln.t === '' ? 30 : 55);
+        setTimeout(step, delay);
+      }
+      step();
+    })();
+  </script>
+  <div id="crt"></div>
+  <div id="help">left-drag fly · click fly-to (or expand dim folder) · dbl-click top-down · right-drag rotate · wheel zoom · <b>R</b> reset</div>
+  <script>
+    // Persistent error capture for debugging from CDP.
+    window.__errs = [];
+    window.addEventListener('error', e => window.__errs.push({
+      type: 'error', msg: e.message, src: e.filename, line: e.lineno, col: e.colno,
+      stack: e.error?.stack
+    }));
+    window.addEventListener('unhandledrejection', e => window.__errs.push({
+      type: 'reject', msg: String(e.reason), stack: e.reason?.stack
+    }));
+  </script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

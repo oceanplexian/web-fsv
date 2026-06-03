@@ -1,0 +1,10 @@
+.git
+node_modules
+tf
+docs
+.github
+scripts
+*.md
+.env*
+.DS_Store
+Makefile
