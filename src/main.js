@@ -5,6 +5,7 @@ import { buildScene } from './scene.js';
 import { makeSky, makeGround } from './sky.js';
 import { preloadCharset } from './labels.js';
 import { makeHalo, positionHalo } from './halo.js';
+import { colorForHaEntity } from './colors.js';
 
 const $ = (sel) => document.querySelector(sel);
 const status = (msg) => { $('#status').textContent = msg; };
@@ -583,10 +584,73 @@ function tickFlashes(now) {
   }
 }
 
+function recolorBoxFromState(box) {
+  if (!box || !box.mesh || !box.node?.haEntityId) return;
+  const c = colorForHaEntity(box.node);
+  box.color = c;
+  box.mesh.material.color.setHex(c);
+}
+
+// Optimistic predicted-next-state for instant UI feedback on toggle.
+function predictNextState(s) {
+  const cur = String(s ?? '').toLowerCase();
+  if (cur === 'on')   return 'off';
+  if (cur === 'off')  return 'on';
+  if (cur === 'open') return 'closed';
+  if (cur === 'closed') return 'open';
+  if (cur === 'locked') return 'unlocked';
+  if (cur === 'unlocked') return 'locked';
+  if (cur === 'playing') return 'paused';
+  if (cur === 'paused')  return 'playing';
+  if (cur === 'docked')  return 'cleaning';
+  // unknown / unavailable / scene timestamp — assume "on" so user sees feedback.
+  return 'on';
+}
+
+async function toggleEntity(node) {
+  const box = currentLayout?.boxes.find(b => b.node === node) || null;
+  flashBox(box, 0xffffff, 700);
+  playSfx('toggle');
+
+  // Optimistic update — flip state and recolor immediately. Reconciled below
+  // (and again on the next /ha/states poll) once HA confirms.
+  const prevState = node.haState;
+  node.haState = predictNextState(prevState);
+  recolorBoxFromState(box);
+  status(`Toggling ${node.name}…`);
+
+  try {
+    const r = await fetch(`/ha/toggle?entity=${encodeURIComponent(node.haEntityId)}`, { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+    try {
+      const states = JSON.parse(j.response);
+      const updated = Array.isArray(states) ? states.find(s => s.entity_id === node.haEntityId) : null;
+      if (updated && updated.state !== node.haState) {
+        node.haState = updated.state;
+        recolorBoxFromState(box);
+      }
+    } catch {}
+    status(`✓ ${node.haEntityId} → ${node.haState}`);
+  } catch (e) {
+    // Roll back optimistic flip on failure.
+    node.haState = prevState;
+    recolorBoxFromState(box);
+    status(`Toggle failed: ${e.message}`);
+  }
+}
+
 renderer.domElement.addEventListener('dblclick', async (ev) => {
   if (pendingClick) { clearTimeout(pendingClick); pendingClick = null; }
   let b = pickBoxAt(ev.clientX, ev.clientY);
   if (!b) return;
+  // HA entity tile — toggle instead of zooming. Selection still updates.
+  if (b.kind === 'file' && b.node.haEntityId) {
+    selectedBox = b;
+    positionHalo(halo, b);
+    toggleEntity(b.node);
+    return;
+  }
   if (b.kind === 'platform' && b.node.truncated) {
     const newBox = await expandNode(b.node);
     if (newBox) b = newBox;
@@ -689,13 +753,47 @@ function loop() {
 }
 loop();
 
+// Poll HA for state changes and recolor tiles whose state changed. Light flash
+// on each change so the user sees the update.
+let haPollTimer = null;
+async function pollHaStates() {
+  try {
+    const r = await fetch('/ha/states');
+    if (!r.ok) return;
+    const map = await r.json();
+    if (!currentLayout) return;
+    for (const b of currentLayout.boxes) {
+      const id = b.node?.haEntityId;
+      if (!id) continue;
+      const next = map[id];
+      if (next == null || next === b.node.haState) continue;
+      b.node.haState = next;
+      recolorBoxFromState(b);
+      flashBox(b, 0x7af0ff, 350); // subtle cyan pulse — distinguishes from user toggle (white)
+    }
+  } catch {}
+}
+function startHaPolling() {
+  if (haPollTimer) return;
+  haPollTimer = setInterval(pollHaStates, 3000);
+}
+
 const params = new URLSearchParams(location.search);
 const initialDepth = Math.min(8, Math.max(1, +params.get('maxDepth') || 2));
 
 (async () => {
   let source = 'demo';
   try { source = (await (await fetch('/config')).json()).source || 'demo'; } catch {}
-  if (source === 'files') {
+  if (source === 'hass') {
+    // Home Assistant mode: rooms are areas, tiles are devices, double-click toggles.
+    document.title = 'fsv — Home Assistant';
+    $('#pathInput').value = 'Home Assistant';
+    $('#pathInput').disabled = true;
+    $('#loadBtn').textContent = 'refresh';
+    $('#loadBtn').onclick = () => loadAndRender('Home Assistant', initialDepth);
+    loadAndRender('Home Assistant', initialDepth);
+    startHaPolling();
+  } else if (source === 'files') {
     // Local mode (FSV_SOURCE=files): fly through a real directory on the host.
     const initial = params.get('path') || '~';
     $('#pathInput').value = initial;

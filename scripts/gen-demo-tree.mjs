@@ -79,7 +79,11 @@ const tree = dir('isla-nublar:/', [
     dir('local', [
       dir('ingen', [
         dir('park', [
-          dir('paddocks', PADDOCKS.map(paddock)),
+          dir('paddocks', [
+            ...PADDOCKS.map(paddock),
+            dir('pen_09_decommissioned', []),  // sector cleared
+            dir('quarantine', []),             // empty — for now
+          ]),
           dir('vehicles', [
             file('explorer_01.tour', rsize(200 * KB, 3 * MB)),
             file('explorer_02.tour', rsize(200 * KB, 3 * MB)),
@@ -126,6 +130,7 @@ const tree = dir('isla-nublar:/', [
             file('wu.key', rsize(512, 2 * KB)),
           ]),
           file('access_control.db', rsize(2 * MB, 40 * MB)),
+          dir('evidence_locker', []),  // empty
         ]),
         dir('genetics', [
           dir('embryos', [
@@ -203,6 +208,8 @@ const tree = dir('isla-nublar:/', [
       file('strange_attractor.dat', rsize(200 * KB, 6 * MB)),
     ]),
     dir('wu', files('protein_fold_', 11, '.dat', 1 * MB, 60 * MB)),
+    dir('dodgson', []),  // we have Dodgson here! — but he left nothing behind
+    dir('gennaro', []),  // bloodsucking lawyer, no files
   ]),
   dir('etc', [
     file('passwd', rsize(1 * KB, 4 * KB)),
@@ -224,6 +231,8 @@ const tree = dir('isla-nublar:/', [
     ]),
     dir('spool', files('job_', 14, '.queue', 4 * KB, 2 * MB)),
     dir('tmp', files('tmp_', 9, '.tmp', 1 * KB, 4 * MB)),
+    dir('empty', []),     // intentionally empty
+    dir('crash', []),     // no core dumps yet... yet
   ]),
   dir('dev', [
     // Device files — chardev / blockdev / fifo / socket give the scene
@@ -247,12 +256,28 @@ const tree = dir('isla-nublar:/', [
     ]),
     dir('demos', files('demo_', 12, '.rgb', 400 * KB, 12 * MB)),
     dir('irix', files('irix_', 16, '.o', 40 * KB, 4 * MB)),
+    dir('scratch', []),   // empty scratch space
   ]),
   dir('tmp', [
     file('nedry_was_here', rsize(256, 4 * KB), 'symlink'),
     ...files('core.', 5, '', 2 * MB, 80 * MB),
+    dir('lost+found', []),  // empty, as it should be
   ]),
 ]);
+
+// ── docs in every folder ─────────────────────────────────────────────────────
+// Every directory carries a doc (a README.md). A handful of dirs above are left
+// intentionally empty (children: []), so they keep their bare platforms.
+function injectDocs(node) {
+  if (node.type !== 'dir') return;
+  const kids = node.children || [];
+  if (kids.length) {
+    const hasDoc = kids.some((c) => /readme|\.md$|\.txt$/i.test(c.name));
+    if (!hasDoc) kids.unshift(file('README.md', rsize(600, 8 * KB)));
+  }
+  for (const c of kids) injectDocs(c);
+}
+injectDocs(tree);
 
 // ── finalize: compute totalSize bottom-up + count nodes ──────────────────────
 let scanned = 0;

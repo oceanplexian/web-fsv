@@ -25,7 +25,24 @@ const EXT_LOOKUP = (() => {
   return m;
 })();
 
+// Home Assistant entity-tile color reflects on/off-ish state at a glance.
+const HA_ON  = 0xb6f56b; // bright green-yellow — "active"
+const HA_OFF = 0x2f5566; // muted dark cyan — "inactive"
+const HA_ALERT = 0xff9966; // orange — playing/heating/cooling/cleaning
+const HA_DEAD = 0x4a4a4a; // grey — unavailable
+export function colorForHaEntity(node) {
+  const s = String(node.haState ?? '').toLowerCase();
+  if (!s || s === 'unavailable' || s === 'unknown') return HA_DEAD;
+  if (s === 'on' || s === 'open' || s === 'unlocked' || s === 'home') return HA_ON;
+  if (s === 'off' || s === 'closed' || s === 'locked') return HA_OFF;
+  if (s === 'playing' || s === 'cleaning' || s === 'heat' || s === 'cool' || s === 'auto') return HA_ALERT;
+  if (s === 'paused' || s === 'idle' || s === 'docked') return HA_OFF;
+  // Numeric / scene timestamp / etc — neutral cyan.
+  return NODE_COLORS.file;
+}
+
 export function colorFor(node) {
+  if (node.haEntityId) return colorForHaEntity(node);
   if (node.type !== 'file') return NODE_COLORS[node.type] ?? NODE_COLORS.unknown;
   const dot = node.name.lastIndexOf('.');
   if (dot > 0) {

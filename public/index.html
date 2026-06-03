@@ -71,7 +71,7 @@
     background: #000;
     color: #33ffcc; font: 14px/1.45 ui-monospace, "Menlo", "Courier New", monospace;
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-    padding: 38px 24px 24px; text-align: left; overflow: hidden;
+    padding: 32px 24px 210px; text-align: left; overflow: hidden;
     transition: opacity 0.6s ease; opacity: 1;
     text-shadow: 0 0 4px rgba(51, 255, 204, 0.5);
   }
@@ -86,8 +86,8 @@
   }
   #splash > * { position: relative; z-index: 2; }
   #splash .logo-wrap {
-    margin: 0 auto 22px; padding: 0;
-    width: min(46vw, 420px); display: flex; justify-content: center;
+    margin: 0 auto 14px; padding: 0;
+    width: min(34vw, 300px); display: flex; justify-content: center;
   }
   #splash .logo-wrap img {
     width: 100%; height: auto;
@@ -103,7 +103,7 @@
   }
   #splash .term {
     width: min(720px, 92vw); margin: 0 auto;
-    font-size: 13px; line-height: 1.55;
+    font-size: 12px; line-height: 1.4;
     color: #33ffcc;
   }
   #splash .term pre {
@@ -120,9 +120,11 @@
     animation: blink 1s steps(1) infinite;
   }
   @keyframes blink { 50% { opacity: 0; } }
+  /* Pinned to the bottom so the boot log can be any length and the
+     "press enter" call-to-action is always on screen. */
   #splash .prompt {
-    width: min(720px, 92vw); margin: 22px auto 0;
-    font-size: 13px; color: #ccff00;
+    position: fixed; bottom: 58px; left: 0; right: 0; z-index: 3;
+    margin: 0; text-align: center; font-size: 13px; color: #ccff00;
   }
   #splash button {
     background: #000; color: #ccff00; border: 1px solid #ccff00;
@@ -136,6 +138,29 @@
     background: #ccff00; color: #000; outline: none; text-shadow: none;
     box-shadow: 0 0 18px rgba(204, 255, 0, 0.55);
   }
+  /* Large "press enter" instruction, styled like a 1993 SGI/Unix terminal
+     system line: plain phosphor monospace, square [ ] brackets like the boot
+     log's [ OK ] rows, a blinking block cursor. No glow halo, no rounded box. */
+  #splash .begin {
+    margin: 20px auto 14px; text-align: center;
+    font-size: clamp(17px, 3vw, 26px);
+    letter-spacing: 0.06em; color: #ccff00;
+  }
+  #splash .begin .key { color: #33ffcc; }
+  #splash .begin .cur { color: #ccff00; animation: blink 1s steps(1) infinite; }
+  #splash .splash-enter {
+    display: block; margin: 0 auto; font-size: 13px; padding: 7px 22px;
+  }
+  /* Small, themed GitHub link pinned to the bottom of the boot screen. */
+  #splash .ghlink {
+    position: absolute; bottom: 16px; left: 0; right: 0; z-index: 2;
+    text-align: center; font: 12px ui-monospace, "Menlo", monospace; color: #1f9b7d;
+  }
+  #splash .ghlink a {
+    color: #33ffcc; text-decoration: none; opacity: 0.82;
+    text-shadow: 0 0 4px rgba(51, 255, 204, 0.4);
+  }
+  #splash .ghlink a:hover { opacity: 1; text-decoration: underline; }
 </style>
 <script type="importmap">
 {
@@ -161,7 +186,11 @@
     <div class="term"><pre id="splashLog"></pre></div>
     <div class="prompt" id="splashPrompt" style="visibility:hidden">
       <span class="label">login:</span> <span style="color:#33ffcc">visitor</span>&nbsp;&nbsp;<span class="label">access:</span> <span style="color:#33ffcc" class="blink">_</span>
-      <button id="splashEnter">[ Enter ]</button>
+      <div class="begin">&gt; PRESS <span class="key">[ ENTER ]</span> TO BEGIN <span class="cur">&#9646;</span></div>
+      <button id="splashEnter" class="splash-enter">[ ENTER ]</button>
+    </div>
+    <div class="ghlink">
+      <a href="https://github.com/oceanplexian/web-fsv" target="_blank" rel="noopener">▸ source: github.com/oceanplexian/web-fsv</a>
     </div>
   </div>
   <script>

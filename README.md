@@ -57,13 +57,42 @@ platforms are unexpanded — click them to lazily scan deeper.
 
 | Env var | Default | Description |
 |---|---|---|
-| `FSV_SOURCE` | `demo` | `demo` (bundled Isla Nublar tree) or `files` (walk the real local filesystem) |
+| `FSV_SOURCE` | `demo` | `demo` (bundled Isla Nublar tree), `files` (walk the real local filesystem), or `hass` (Home Assistant — see below) |
 | `PORT` | `8765` | HTTP listen port |
 | `HOST` | `0.0.0.0` | Bind address |
+| `HASS_URL` | `http://homeassistant.local:8123` | Home Assistant base URL (`hass` mode) |
+| `HASS_TOKEN` | *(none)* | Home Assistant long-lived access token (`hass` mode) |
 
 `files` mode reads your filesystem locally and never leaves your machine. The
 hosted demo only ever serves the bundled tree — it has no filesystem access and
 no secrets.
+
+### Visualize your Home Assistant
+
+`hass` mode turns the visualizer into a live control surface for your own Home
+Assistant: **areas become rooms** (platforms), **devices become tiles** sized by
+activity and colored by state, and **double-clicking a tile toggles it** (lights,
+switches, fans, covers, locks, scenes, …). Tile colors update in real time as
+states change.
+
+1. In Home Assistant, open your **profile → Security → Long-lived access tokens**
+   and create a token.
+2. Run with your URL + token in the environment:
+
+   ```bash
+   FSV_SOURCE=hass \
+   HASS_URL=http://homeassistant.local:8123 \
+   HASS_TOKEN=eyJ...your-token... \
+   npm start
+   ```
+
+   Then open <http://localhost:8765>.
+
+Credentials are read **only** from `HASS_URL` / `HASS_TOKEN` at runtime —
+nothing is stored, hardcoded, or written to disk. Keep your token in your
+environment (or a local `.env` that you never commit); `.env` is gitignored.
+This mode talks directly to your HA instance, so run it where it can reach HA
+(your LAN), not on the public demo.
 
 ## Controls
 
@@ -96,8 +125,10 @@ scripts/gen-demo-tree.mjs   generator for the demo tree
 ```
 
 `GET /scan` returns the tree as JSON (`{ tree, scanned, root }`); in `demo` mode
-it serves `data/demo-tree.json`, in `files` mode it walks the requested path.
-Regenerate the demo tree with:
+it serves `data/demo-tree.json`, in `files` mode it walks the requested path, and
+in `hass` mode it builds the tree from your Home Assistant areas and devices.
+`hass` mode adds `GET /ha/states` (poll) and `POST /ha/toggle` (control), both of
+which call the HA REST API using `HASS_TOKEN`. Regenerate the demo tree with:
 
 ```bash
 npm run gen-demo      # -> data/demo-tree.json
