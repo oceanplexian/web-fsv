@@ -150,6 +150,8 @@ scene.add(halo);
 let currentSceneGroup = null;
 let pickables = [];
 let cameraAnim = null;
+let tour = null;            // active cinematic auto-flyby (curved, looping)
+let tourEnabled = false;    // whether to start the tour on load (see init)
 let selectedBox = null;
 let currentRootData = null;
 let currentRootPath = null;
@@ -219,16 +221,22 @@ async function loadAndRender(targetPath, maxDepth = 2) {
 
   const layout = rebuildSceneFromTree();
 
-  const root = layout.boxes[0];
-  const cx = root.x + root.w / 2, cz = root.z + root.d / 2;
-  // Cinematic framing: pulled back enough to read the surrounding rooms, with
-  // a low ~14° elevation so the horizon sits near the top of the viewport.
-  const span = Math.max(root.w, root.d) * 1.1;
-  flyCamera(
-    new THREE.Vector3(cx, span * 0.6, cz + span * 2.4),
-    new THREE.Vector3(cx, root.yBase + root.height * 0.5, cz),
-    2.4,
-  );
+  if (tourEnabled) {
+    // Cinematic auto-flyby instead of a static frame. Plays until the first
+    // canvas click / scroll / arrow-key (see stopTour).
+    startTour();
+  } else {
+    const root = layout.boxes[0];
+    const cx = root.x + root.w / 2, cz = root.z + root.d / 2;
+    // Cinematic framing: pulled back enough to read the surrounding rooms, with
+    // a low ~14° elevation so the horizon sits near the top of the viewport.
+    const span = Math.max(root.w, root.d) * 1.1;
+    flyCamera(
+      new THREE.Vector3(cx, span * 0.6, cz + span * 2.4),
+      new THREE.Vector3(cx, root.yBase + root.height * 0.5, cz),
+      2.4,
+    );
+  }
 
   status(
     `${payload.root}  ·  ${payload.scanned} entries  ·  scan ${tScan}s` +
@@ -248,6 +256,7 @@ function layoutBounds(boxes) {
 }
 
 function flyCamera(toPos, toTarget, durationSec = 1.2) {
+  tour = null;          // any deliberate camera move ends the auto-flyby
   _flyVel.set(0, 0, 0); // canned flight overrides any inertial coast
   cameraAnim = {
     fromPos: camera.position.clone(),
@@ -268,6 +277,42 @@ function tickCameraAnim(now) {
   camera.position.lerpVectors(cameraAnim.fromPos, cameraAnim.toPos, e);
   controls.target.lerpVectors(cameraAnim.fromTarget, cameraAnim.toTarget, e);
   if (t === 1) cameraAnim = null;
+}
+
+// ---- Cinematic auto-flyby tour --------------------------------------------
+// A smooth, looping CatmullRom orbit whose radius AND height oscillate around
+// the loop, so the camera swoops in and out / rises and dips instead of tracing
+// a flat circle — a curved, dramatic flythrough. Runs until the first user
+// interaction (canvas click, scroll, or arrow keys).
+function startTour() {
+  if (!currentLayout || !currentLayout.boxes.length) { tour = null; return; }
+  const root = currentLayout.boxes[0];
+  const cx = root.x + root.w / 2, cz = root.z + root.d / 2;
+  const span = Math.max(layoutBounds(currentLayout.boxes), 20);
+  const yLook = root.yBase + root.height * 0.5;
+  const N = 7;
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    const a = Math.PI / 2 + (i / N) * Math.PI * 2;        // begin at the front (+z)
+    const r = span * (0.95 + 0.42 * Math.sin(a + 0.3));   // radius breathes in/out
+    const h = span * (0.30 + 0.34 * (0.5 + 0.5 * Math.sin(a * 2))); // height swoops
+    pts.push(new THREE.Vector3(cx + Math.cos(a) * r, yLook + h, cz + Math.sin(a) * r));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+  cameraAnim = null;
+  _flyVel.set(0, 0, 0);
+  tour = { curve, lookAt: new THREE.Vector3(cx, yLook, cz), start: performance.now(), duration: 34 };
+}
+
+function stopTour() {
+  tour = null;
+}
+
+function tickTour(now) {
+  if (!tour) return;
+  const u = ((now - tour.start) / 1000 / tour.duration) % 1; // looped, arc-length param
+  camera.position.copy(tour.curve.getPointAt(u));
+  controls.target.copy(tour.lookAt);
 }
 
 function pickBoxAt(clientX, clientY) {
@@ -452,6 +497,11 @@ const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _move = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
+
+// Any interaction with the scene (click, drag, right-drag, scroll) ends the
+// auto-flyby and hands control to the user.
+renderer.domElement.addEventListener('pointerdown', stopTour);
+renderer.domElement.addEventListener('wheel', stopTour, { passive: true });
 
 renderer.domElement.addEventListener('pointerdown', (ev) => {
   if (ev.button !== 0) return;
@@ -721,6 +771,7 @@ function loop() {
   requestAnimationFrame(loop);
   const now = performance.now();
   const dt = haloClock.getDelta() * 1000; // ms
+  tickTour(now);
   applyDragFly(dt);
   tickCameraAnim(now);
   tickFlashes(now);
@@ -784,6 +835,10 @@ const initialDepth = Math.min(8, Math.max(1, +params.get('maxDepth') || 2));
 (async () => {
   let source = 'demo';
   try { source = (await (await fetch('/config')).json()).source || 'demo'; } catch {}
+  // Auto-flyby tour: on by default in demo mode, off elsewhere. Override with
+  // ?tour=1 / ?tour=0.
+  const tourParam = params.get('tour');
+  tourEnabled = tourParam != null ? tourParam !== '0' : (source === 'demo');
   if (source === 'hass') {
     // Home Assistant mode: rooms are areas, tiles are devices, double-click toggles.
     document.title = 'fsv — Home Assistant';

@@ -11,13 +11,13 @@
 
 import { colorFor, NODE_COLORS } from './colors.js';
 
-const PLATFORM_HEIGHT = 0.6;
-const FILE_BASE_HEIGHT = 0.45;
-const MIN_PLATFORM_SIDE = 4.0;
-const PLATFORM_PAD = 1.0;       // inner padding (visible coral border)
-const FILE_GAP = 0.18;          // gap between adjacent file tiles
-const RING_GAP = 8.0;           // air between parent edge and child platform
-const SCALE_PER_DEPTH = 0.85;   // child platforms shrink with depth
+const PLATFORM_HEIGHT = 0.9;
+const FILE_BASE_HEIGHT = 0.5;
+const MIN_PLATFORM_SIDE = 6.0;
+const PLATFORM_PAD = 1.2;       // inner padding (visible coral border)
+const FILE_GAP = 0.2;           // gap between adjacent file tiles
+const RING_GAP = 9.5;           // air between parent edge and child platform
+const SCALE_PER_DEPTH = 0.88;   // child platforms shrink with depth
 const MIN_WEDGE = 0.04;         // rad — prevents div-by-zero on tiny slices
 const MAX_RADIUS_RATIO = 35;    // cap ring radius vs parent (prevents runaway)
 export const LABEL_STRIP_FRAC = 0.16;  // bottom fraction reserved for the dir label
@@ -102,7 +102,7 @@ function computeSubtreeWeights(dir) {
 // dwarf the root and explode the world. The treemap inside each platform is
 // normalized in `packFiles`, so the platform's outer size only needs to look
 // good — it doesn't need to encode total bytes.
-const MAX_PLATFORM_SIDE = 22.0;
+const MAX_PLATFORM_SIDE = 32.0;
 function computePlatformSizes(dir, depth) {
   if (dir.type !== 'dir') return;
   const scale = Math.pow(SCALE_PER_DEPTH, depth);
@@ -110,7 +110,7 @@ function computePlatformSizes(dir, depth) {
   const fileCount = Math.max(files.length, 1);
   const baseSide = Math.min(
     MAX_PLATFORM_SIDE,
-    MIN_PLATFORM_SIDE + Math.log10(fileCount + 1) * 5.0
+    MIN_PLATFORM_SIDE + Math.log10(fileCount + 1) * 6.5
   );
   dir._platformW = baseSide * scale;
   dir._platformD = baseSide * scale;

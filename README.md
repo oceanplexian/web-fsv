@@ -40,7 +40,10 @@ npm install
 npm start            # serves the Jurassic Park demo on http://localhost:8765
 ```
 
-Open <http://localhost:8765> and hit **Enter** at the boot prompt.
+Open <http://localhost:8765> and hit **Enter** at the boot prompt. The demo
+opens on a cinematic auto-flyby — a curved, swooping orbit over the park. The
+first click, scroll, or arrow key hands control to you. Disable it with
+`?tour=0` (or force it on elsewhere with `?tour=1`).
 
 ### Visualize your own filesystem
 
@@ -107,6 +110,9 @@ This mode talks directly to your HA instance, so run it where it can reach HA
 | **Enter** | top-down on the selected node |
 | **Esc** | frame the root (double-tap: frame everything) |
 | **R** | reset to the canonical FSN viewing angle |
+
+The demo starts on an automatic curved flyby; any of the above interactions
+stops it and hands you the controls (`?tour=0` disables it entirely).
 
 ## How it works
 
